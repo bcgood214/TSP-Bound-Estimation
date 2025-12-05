@@ -36,7 +36,7 @@ def load_data(path):
 
     return np.array(train_set), np.array(train_labels)
 
-if __name__ == "__main__":
+def build_model():
     x_train, y_train = load_data('./trainingGraphs/5-5000.json')
     print(f"Training set: {x_train}")
     print(f"Training labels: {y_train}")
@@ -58,3 +58,8 @@ if __name__ == "__main__":
     print('\nTest loss:', test_loss)
 
     model.save(MODEL_NAME)
+
+    return model
+
+if __name__ == "__main__":
+    build_model()
