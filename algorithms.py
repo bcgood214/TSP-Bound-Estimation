@@ -4,6 +4,7 @@ import json
 import pandas as pd
 import os
 import numpy as np
+import argparse
 
 def load_model(file):
     return tf.keras.models.load_model(file)
@@ -166,13 +167,23 @@ if __name__ == "__main__":
     global debug
     global model_verbose
     
-    debug = False
-    verbose_solving = False
-    model_verbose = 0
-    model_file = './new_model.keras'
-    graph_folder = './validationGraphs/5'
-    solution_file = './validationGraphs/5/solution_comp.csv'
-    max_iterations = 10
+    parser = argparse.ArgumentParser()
+    parser.add_argument('folder')
+    parser.add_argument('solution_file')
+    parser.add_argument('model')
+    parser.add_argument('-v', '--model_verbose', type=int, default=0)
+    parser.add_argument('-d', '--debug', type=bool, default=False)
+    parser.add_argument('-s', '--solver_verbose', type=bool, default=False)
+    parser.add_argument('-i', '--iterations', type=int, default=10)
+    args = parser.parse_args()
+    
+    model_file = args.model #'./new_model.keras'
+    graph_folder = args.folder #'./validationGraphs/5'
+    solution_file = args.solution_file #'./validationGraphs/5/solution_comp.csv'
+    max_iterations = args.iterations
+    debug = args.debug
+    verbose_solving = args.solver_verbose
+    model_verbose = args.model_verbose
     
     print('Attempting to load model')
     model = load_model(model_file)
