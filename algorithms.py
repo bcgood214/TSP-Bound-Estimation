@@ -125,7 +125,7 @@ def add_edges(g, new_sol, bound):
                 # but to keep consistency with the inadmissability of the model, we make a prediction anyways
                 straight_dist = np.linalg.norm(np.array(g.nodes[v]['pos']) - np.array(g.nodes[0]['pos']))
                 # add last possible return edge to the start to complete the cycle
-                prediction = model.predict(np.array([[len(unsolved_nodes), straight_dist]]))[0,0]
+                prediction = model.predict(np.array([[len(unsolved_nodes), straight_dist]]), verbose = model_verbose)[0,0]
                 valid_exp.append({'u': u, 'v': v, 'c': g[u][v]['weight'], "prediction": prediction})
                 break   # only add the zero edge
         elif not v in new_sol["vertices"]:
@@ -134,7 +134,7 @@ def add_edges(g, new_sol, bound):
                 # if path exists, get the straight line distance to the start
                 straight_dist = np.linalg.norm(np.array(g.nodes[v]['pos']) - np.array(g.nodes[0]['pos']))
                 # make prediction based on 
-                prediction = model.predict(np.array([[len(unsolved_nodes), straight_dist]]))[0,0]
+                prediction = model.predict(np.array([[len(unsolved_nodes), straight_dist]]), verbose = model_verbose)[0,0]
                 if not prediction > bound:
                     c = g[u][v]['weight']
                     valid_exp.append({'u': u, 'v': v, 'c': g[u][v]['weight'], "prediction": prediction})
@@ -164,28 +164,39 @@ if __name__ == "__main__":
     global known_tour_vals
     global solved_tour_vals
     global debug
+    global model_verbose
     
     debug = False
+    verbose_solving = False
+    model_verbose = 0
     model_file = './new_model.keras'
-    graph_folder = './smallsetgraphs'
+    graph_folder = './validationGraphs/5'
+    solution_file = './validationGraphs/5/solution_comp.csv'
     max_iterations = 10
     
     print('Attempting to load model')
     model = load_model(model_file)
-    print(model.summary())
+    if debug: print(model.summary())
     print('Loaded model')
     
     print('Attempting to import graphs')
     known_tour_vals = []
     graphs = []
     load_graphs(graph_folder)
-    print('Imported graphs')
-    # print(len(known_tour_vals))
-    # print(known_tour_vals)
+    print('Imported ', len(graphs), ' graphs')
+    if debug: print(len(known_tour_vals))
+    if debug: print(known_tour_vals)
     
-    soltest1 = solve_tsp(graphs[0], max_iterations)
-    print(soltest1)
-    print(known_tour_vals[0])
-    # solved_tour_vals = []
-    # for g in graphs:
-    #     solve_tsp(g, max_iterations)
+    # soltest1 = solve_tsp(graphs[0], max_iterations)
+    # print(soltest1)
+    # print(known_tour_vals[0])
+    solved_tour_vals = [0] * len(known_tour_vals)
+    for i in range(len(graphs)):
+        print("Graph: ", i)
+        g = graphs[i]
+        if verbose_solving: print('n = ', g.number_of_nodes())
+        g_sol = solve_tsp(g, max_iterations)
+        if verbose_solving: print('solve: ', g_sol['cost'], ' exact: ', known_tour_vals[i])
+        solved_tour_vals[i] = g_sol['cost']
+    
+    np.savetxt(solution_file,np.array([known_tour_vals,solved_tour_vals]),delimiter=',')
