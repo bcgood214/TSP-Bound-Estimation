@@ -7,6 +7,7 @@ import pandas as pd
 import math
 
 INPUT_DIM = 2
+MODEL_NAME = "new_model.keras"
 
 def load_data(path):
     with open(path, 'r') as f:
@@ -56,4 +57,4 @@ if __name__ == "__main__":
     test_loss, test_acc = model.evaluate(x_test, y_test, verbose=2)
     print('\nTest loss:', test_loss)
 
-    model.save('first_model.keras')
+    model.save(MODEL_NAME)
