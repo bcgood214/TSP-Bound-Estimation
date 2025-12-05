@@ -3,3 +3,4 @@ matplotlib
 pygraphviz
 pandas
 tensorflow
+keras

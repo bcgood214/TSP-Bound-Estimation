@@ -1,10 +1,9 @@
 import tensorflow as tf
 import networkx as nx
 import json
-import numpy as np
 import pandas as pd
 import os
-
+import numpy as np
 
 def load_model(file):
     return tf.keras.models.load_model(file)
@@ -46,47 +45,15 @@ def load_graphs(folder):
                     # also record known tour value
                     known_tour_vals.append(getattr(row, 'tourCost'))
 
-#Edges [origin = u, destination = v, weight = c]
-# E = [u , v, c]
-#List of vertices
-# V = []
-#Number of vertices
-# n = len(V)
-#Number of edges
-# m = len(E)
-#Starting vertex
-# s = V[0]
-#number of iterations to approximate on
-# max = 100
-
-#output in visiting order
-solution = []
-
-#Algorithmic variables
-q = []  #search stack (represents the search tree)
-
-# cur_ver = s #current vertex for searching
-
-#Best known cost and edges
-solution = {"cost": float("inf"), "edges": []}
-
-#Best current cost and edges
-new_sol = {"cost": 0, "edges": []}
-
-#Visited vertices in new_sol
-new_verts = set()
-
-#upper bound to prune
-bound = float("inf")
-
-def solve_tsp():
+def solve_tsp(g, max_iterations):
     #Find initial solution using DFS
-    bound = 9999    #initialize bound to high value
-    solution = dfs(bound)
+    bound = float("inf")    #initialize bound to high value
+    solution = dfs(g, bound)
+    bound = solution["cost"]
 
     #outer loop - repeat a set number of iterations (time limit)
-    for i in range(max):
-        new_sol = dfs()
+    for i in range(max_iterations):
+        new_sol = dfs(g, bound)
 
         #error happens when no more edges to explore, premature termination 
         if new_sol is not None:
@@ -98,97 +65,110 @@ def solve_tsp():
         
     return solution
 
-def dfs(bound):
-    #Check if solution needs to return
-    # if len(new_sol) == n:
-        # return new_sol
+def dfs(g, bound):
+    new_sol = {"cur_ver": 0, "n": len(g.nodes()), 
+               "cost": 0, "edges": [], 
+               "vertices": set(), "search_stack": []}  #vertices does not include start vertex 0 until last edge
     
-    #add edges to search stack
-    add_edges()
-
+    # loop to drive the search
     while True:
-        if len(q) == 0:
-            return None #error, no more edges to explore
-        
-        can_edge = q.pop(0)
+        #Check if solution needs to return
+        if len(new_sol["edges"]) == new_sol['n'] and 0 in new_sol["vertices"]:
+            return new_sol
+    
+        if debug: print("cur_ver:", new_sol['cur_ver'])
+        #add edges to search stack based on a new current vertex
+        add_edges(g, new_sol, bound)
 
-        if can_edge["prediction"] > bound:
-            continue
+        # loop to handle searching newly discovered edges and backtracking
+        while True:
+            if len(new_sol['search_stack']) == 0:
+                return None #error, no more edges to explore
 
-        if can_edge.u == cur_ver:
-            new_sol["edges"].append(can_edge)
-            new_sol["cost"] += can_edge["c"]
-            cur_ver = can_edge.v
-            new_verts.add(cur_ver)
-            break
-        else:
-            q.prepend(can_edge)
-            backtrack()
-            
-        return dfs()
+            # get the next candidate edge from the search stack
+            can_edge = new_sol["search_stack"].pop(0)
 
-def add_edges():
-    valid_exp = []
-
-    #find new valid edges and get their predicted value
-    for (u, v, c) in E:
-        # if u != cur_ver:
-            # continue
-
-        #skip edges that would loop back
-        if len(new_sol["edges"]) > 0:
-            last_u = new_sol["edges"][-1]["u"]
-            if v == last_u:
+            # check if edge even still in bounds (should be)
+            if can_edge["prediction"] > bound:
                 continue
 
-        #skip edges that go to explored nodes unless it is start
-        if v in new_verts and v != s:
-            continue
+            # check if this edge matches the depth-first approach and still valid
+            if can_edge['u'] == new_sol['cur_ver']:
+                # valid new depth search, update information
+                new_sol["edges"].append(can_edge)
+                new_sol["cost"] += can_edge["c"]
+                new_sol["cur_ver"] = can_edge['v']
+                new_sol["vertices"].add(new_sol["cur_ver"])
+                if debug: print("vertices: ", new_sol['vertices'])
+                # a new current vertex order was discovered, exit the searching edges to check if solution complete or add new edges
+                break
+            else:   
+                #edge must be from vertex higher in search tree, save edge and backtrack to other vertex that has already 
+                #had its edges added above, updating current vertex
+                new_sol['search_stack'].insert(0, can_edge)
+                backtrack(new_sol)
 
-        new_edge = {"u": u, "v": v, "c": c}
-
-        #prediction for a potential new_edge = predict
-        predict = model.predictValue(new_sol, new_edge)
-
-        if predict <= bound:
-            valid_exp.append({
-                "u": u,
-                "v": v,
-                "c": c,
-                "prediction": predict
-            })
-
-    #sort new valid edges by prediction
+def add_edges(g, new_sol, bound):
+    valid_exp = []
+    u = new_sol['cur_ver']
+    if debug: print("u: ", u)
+    unsolved_nodes = g.nodes() - new_sol['vertices']
+    # unsolved_nodes.add(u)
+    if debug: print("unsolved nodes: ", unsolved_nodes)
+    unsolved_graph = g.subgraph(unsolved_nodes)
+    if debug: print(unsolved_graph.edges())
+    for v in nx.neighbors(g, u):
+        if debug: print("v: ", v)
+        if v == 0:  #skip over going back to 0 unless it is the last edge taken
+            if len(new_sol['edges']) == new_sol['n']-1:
+                # this straight line distance from 0 to 0 is probably 0... 
+                # but to keep consistency with the inadmissability of the model, we make a prediction anyways
+                straight_dist = np.linalg.norm(np.array(g.nodes[v]['pos']) - np.array(g.nodes[0]['pos']))
+                # add last possible return edge to the start to complete the cycle
+                prediction = model.predict(np.array([[len(unsolved_nodes), straight_dist]]))[0,0]
+                valid_exp.append({'u': u, 'v': v, 'c': g[u][v]['weight'], "prediction": prediction})
+                break   # only add the zero edge
+        elif not v in new_sol["vertices"]:
+            if debug: print("checking path for v: ", v)
+            if nx.has_path(unsolved_graph, v, 0):   #check if a path exists from what would be the new vertex to the start
+                # if path exists, get the straight line distance to the start
+                straight_dist = np.linalg.norm(np.array(g.nodes[v]['pos']) - np.array(g.nodes[0]['pos']))
+                # make prediction based on 
+                prediction = model.predict(np.array([[len(unsolved_nodes), straight_dist]]))[0,0]
+                if not prediction > bound:
+                    c = g[u][v]['weight']
+                    valid_exp.append({'u': u, 'v': v, 'c': g[u][v]['weight'], "prediction": prediction})
+    
+    # sort any potential edges added by their prediction value
     valid_exp.sort(key=lambda e: e["prediction"])
+    
+    # prepend these new edges to the search stack to enforce depth first searching
+    new_sol["search_stack"] = valid_exp + new_sol['search_stack']
 
-    #add the new edges to the queue in sorted order
-    q[0:0] = valid_exp
-
-def backtrack():
+def backtrack(new_sol):
+    if debug: print("backtracking; edges: ", new_sol['edges'])
     if not new_sol["edges"]:
-        #nothing to backtrack
-        # cur_ver = s
+        #nothing to backtrack, shouldn't ever really run
         return
 
-    edge_rem = new_sol["edges"][-1]  #get_last_item
-    new_verts.discard(edge_rem["v"])  #remove that vertex from visited
-    new_sol["cost"] -= edge_rem["c"]
-    new_sol["edges"].pop()           #remove_last_item
+    # get the last added edge to backtrack on
+    edge_rem = new_sol["edges"][-1]
+    new_sol['vertices'].remove(edge_rem["v"])  #remove the destination vertex from visited
+    new_sol["cost"] -= edge_rem["c"] # remove the cost
+    new_sol['cur_ver'] = edge_rem['u'] # set the current vertex to the source
+    new_sol["edges"].pop(-1)  # pop from the edges list and discard
 
-    #move current vertex back to the previous vertex
-    if new_sol["edges"]:
-        cur_ver = new_sol["edges"][-1]["v"]
-    # else:
-        # cur_ver = s
-        
-        
 if __name__ == "__main__":
     global model
     global graphs
     global known_tour_vals
     global solved_tour_vals
+    global debug
+    
+    debug = False
     model_file = './new_model.keras'
     graph_folder = './smallsetgraphs'
+    max_iterations = 10
     
     print('Attempting to load model')
     model = load_model(model_file)
@@ -203,6 +183,9 @@ if __name__ == "__main__":
     # print(len(known_tour_vals))
     # print(known_tour_vals)
     
+    soltest1 = solve_tsp(graphs[0], max_iterations)
+    print(soltest1)
+    print(known_tour_vals[0])
     # solved_tour_vals = []
     # for g in graphs:
-    #     solve_tsp(model)
+    #     solve_tsp(g, max_iterations)
