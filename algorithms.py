@@ -1,20 +1,63 @@
-#Tried to match the algorithm with the pseudocode. You can make any changes to make it work properly. 
+import tensorflow as tf
+import networkx as nx
+import json
+import numpy as np
+import pandas as pd
+import os
 
-#inputs
-model = model
+
+def load_model(file):
+    return tf.keras.models.load_model(file)
+
+def graph_from_row(row):
+  G = nx.Graph()
+  v = getattr(row, 'V')
+  # subtract 1 from vertex labels to account for the 1-index
+  v = [i-1 for i in v]
+  sorted_nodes = sorted(v)
+  coord_list = getattr(row, 'Vcoords')
+  for i, node_id in enumerate(sorted_nodes):
+    original_index = v.index(node_id)
+    coords = coord_list[original_index]
+    G.add_node(node_id, pos=coords)
+    
+  for edge_str, weight in getattr(row,'Eweights').items():
+    u_str, v_str = edge_str.split(',')
+    # again, subtract 1 from edge labels to account for the 1-index
+    u, v = int(u_str) - 1, int(v_str) - 1
+    G.add_edge(u, v, weight=weight)
+  
+  return G
+
+def load_graphs(folder):
+    # go through all files in the folder
+    for (root, dirs, file) in os.walk(folder):
+        for f in file:
+            # get json files
+            if '.json' in f:
+                with open(os.path.join(folder, f)) as json_file:
+                    # load that set of graphs
+                    graphset = json.load(json_file)
+                # turn into dataframe
+                df = pd.DataFrame(graphset)
+                for row in df.itertuples(index=False):
+                    # each row in dataframe represents a graph, turn into graph object
+                    graphs.append(graph_from_row(row))
+                    # also record known tour value
+                    known_tour_vals.append(getattr(row, 'tourCost'))
 
 #Edges [origin = u, destination = v, weight = c]
-E = [u , v, c]
+# E = [u , v, c]
 #List of vertices
-V = []
+# V = []
 #Number of vertices
-n = len(V)
+# n = len(V)
 #Number of edges
-m = len(E)
+# m = len(E)
 #Starting vertex
-s = V[0]
+# s = V[0]
 #number of iterations to approximate on
-max = 100
+# max = 100
 
 #output in visiting order
 solution = []
@@ -22,7 +65,7 @@ solution = []
 #Algorithmic variables
 q = []  #search stack (represents the search tree)
 
-cur_ver = s #current vertex for searching
+# cur_ver = s #current vertex for searching
 
 #Best known cost and edges
 solution = {"cost": float("inf"), "edges": []}
@@ -36,10 +79,10 @@ new_verts = set()
 #upper bound to prune
 bound = float("inf")
 
-def main():
+def solve_tsp():
     #Find initial solution using DFS
-    cur_ver = s
-    solution = dfs()
+    bound = 9999    #initialize bound to high value
+    solution = dfs(bound)
 
     #outer loop - repeat a set number of iterations (time limit)
     for i in range(max):
@@ -55,13 +98,13 @@ def main():
         
     return solution
 
-def dfs():
+def dfs(bound):
     #Check if solution needs to return
-    if len(new_sol) == n:
-        return new_sol
+    # if len(new_sol) == n:
+        # return new_sol
     
     #add edges to search stack
-    addEdges()
+    add_edges()
 
     while True:
         if len(q) == 0:
@@ -72,7 +115,7 @@ def dfs():
         if can_edge["prediction"] > bound:
             continue
 
-        if can_edge.u == cur_vert:
+        if can_edge.u == cur_ver:
             new_sol["edges"].append(can_edge)
             new_sol["cost"] += can_edge["c"]
             cur_ver = can_edge.v
@@ -84,13 +127,13 @@ def dfs():
             
         return dfs()
 
-def addEdges():
+def add_edges():
     valid_exp = []
 
     #find new valid edges and get their predicted value
     for (u, v, c) in E:
-        if u != cur_ver:
-            continue
+        # if u != cur_ver:
+            # continue
 
         #skip edges that would loop back
         if len(new_sol["edges"]) > 0:
@@ -124,7 +167,7 @@ def addEdges():
 def backtrack():
     if not new_sol["edges"]:
         #nothing to backtrack
-        cur_ver = s
+        # cur_ver = s
         return
 
     edge_rem = new_sol["edges"][-1]  #get_last_item
@@ -135,5 +178,31 @@ def backtrack():
     #move current vertex back to the previous vertex
     if new_sol["edges"]:
         cur_ver = new_sol["edges"][-1]["v"]
-    else:
-        cur_ver = s
+    # else:
+        # cur_ver = s
+        
+        
+if __name__ == "__main__":
+    global model
+    global graphs
+    global known_tour_vals
+    global solved_tour_vals
+    model_file = './new_model.keras'
+    graph_folder = './smallsetgraphs'
+    
+    print('Attempting to load model')
+    model = load_model(model_file)
+    print(model.summary())
+    print('Loaded model')
+    
+    print('Attempting to import graphs')
+    known_tour_vals = []
+    graphs = []
+    load_graphs(graph_folder)
+    print('Imported graphs')
+    # print(len(known_tour_vals))
+    # print(known_tour_vals)
+    
+    # solved_tour_vals = []
+    # for g in graphs:
+    #     solve_tsp(model)
