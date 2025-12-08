@@ -12,7 +12,8 @@ Requirements:
 - Install requirements 
   - `python -m pip install -r ./requirements.txt`
   - May need to install prerequisite on system (~20 mb): 
-    - `sudo apt install libgraphviz-dev graphviz`
+    - Linux-based command: `sudo apt install libgraphviz-dev graphviz`
+    - May need to install graphviz separately if running on Windows
 
 Running the algorithm:  
 `python tsp-main.py {path-to-folder-of-graphs} {path-to-solution.csv} {path-to-model.keras}`
